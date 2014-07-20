@@ -1,20 +1,118 @@
+---
+output: html_document
+---
 # Reproducible Research: Peer Assessment 1
 
 
 ## Loading and preprocessing the data
 
-
+```{r}
+activity <- read.csv("activity.csv")
+```
 
 ## What is mean total number of steps taken per day?
 
+Following code computes an average of steps per day.
 
+```{r}
+library(plyr)
+per_day <- ddply(activity, .(date), function(df) {
+  data.frame(date=df$date[1], steps=sum(df$steps, na.rm=T))  
+})
+
+step_mean <- mean(per_day$steps, na.rm=T)
+```
+
+It shows the mean is `r step_mean`.
 
 ## What is the average daily activity pattern?
 
+The following chart shows the change of steps over time.
 
+```{r}
+per_step <- ddply(activity, .(interval), function(df) {
+  data.frame(interval=df$interval[1], steps=mean(df$steps, na.rm=T))
+})
+plot(per_step$interval, per_step$steps, type="l", xlab="Interval", ylab="Averate Steps")
+```
+
+
+```{r}
+max_step <- max(per_step$steps, na.rm=T)
+max_step_interval <- per_step$interval[per_step$steps == max_step]
+max_step_interval
+```
+
+Also, a person takes the largest number of steps at interval `r max_step_interval` in average.
 
 ## Imputing missing values
 
+```{r}
+na_counts <- length(which(is.na(activity$step)))
+na_counts
+```
 
+According to the code above, there are `r na_counts` NA instances. Let's see whether it is reasonable to just drop
+these values.
+
+Following code fills the NA records with the average step count.
+
+```{r}
+step_mean <- mean(per_step$steps)
+filled_activity = activity
+filled_activity[is.na(activity$steps),]$steps <- step_mean
+filled_per_day <- ddply(filled_activity, .(date), function(df) {
+  data.frame(date=df$date[1], steps=sum(df$steps))  
+})
+
+filled_steps_mean <- mean(filled_per_day$steps)
+filled_steps_median <- median(filled_per_day$steps)
+hist(filled_per_day$steps, main="Activity distribution, replacing NA with average", xlab="Step count")
+```
+
+Compare the histgram with the one from the table that drops NAs.
+
+```{r}
+steps_mean <- mean(per_day$steps)
+steps_median <- median(per_day$steps)
+hist(per_day$steps, main="Activity distribution, dropping NA", xlab="Step count")
+```
+
+The filled version has less portion of smaller and larger number of entries.
+So filling with the mean may deemphasize the characteristics at the skirt of the histogram.
+
+Here is the mean and the median of both filled nad dropped versions of tables:
+
+ * Mean (Filling NA with average): `r filled_steps_mean`
+ * Median (Filling NA with average): `r filled_steps_median`
+ * Mean (Dropping NA): `r steps_mean`
+ * Median (Dropping NA): `r steps_median`
+
+They differ only slightly.
+That means the distribution isn't skewed in term of the step count.
+That corresponds what the histogram shows.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+library(lubridate)
+
+activity$ymd <- ymd(as.character(activity$date))
+activity$weekends <- weekdays(activity$ymd) %in% c("Saturday", "Sunday")
+per_step_per_daytype <- ddply(activity, .(weekends), function(df) {
+  ddply(df, .(interval), function(dg) {
+    data.frame(weekends=dg$weekends[1], interval=dg$interval[1], steps=mean(dg$steps, na.rm=T))
+  })
+})
+
+activity_weekdays <- per_step_per_daytype[!per_step_per_daytype$weekends,]
+activity_weekends <- per_step_per_daytype[ per_step_per_daytype$weekends,]
+par(mfrow=c(1,2))
+plot(activity_weekdays$interval, activity_weekdays$steps, type="l",
+     xlab="Interval", ylab="Steps", main="Weekday Activity")
+plot(activity_weekends$interval, activity_weekends$steps, type="l",
+     xlab="Interval", ylab="Steps", main="Weekend Activity")
+```
+
+The chart shows the weekday activity is biased to morning. 
+In contrast, the weekend activity is scattered across the day.
